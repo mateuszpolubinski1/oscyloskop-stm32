@@ -23,7 +23,8 @@
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
-
+#include "adc_dma.h"
+#include "usbd_cdc_if.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -109,13 +110,20 @@ int main(void)
   MX_TIM1_Init();
   MX_FATFS_Init();
   /* USER CODE BEGIN 2 */
-
+  HAL_Delay(2000);
+  CDC_Transmit_FS((uint8_t*)"Hello World!\r\n", 14);
+  HAL_Delay(100);
+  ADC_DMA_Start();
   /* USER CODE END 2 */
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
   while (1)
   {
+	  if (flaga_polowa)
+	         ADC_DMA_Przetworz_Polowe();
+	  if (flaga_pelny)
+	         ADC_DMA_Przetworz_Pelny();
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
