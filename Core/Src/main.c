@@ -25,11 +25,11 @@
 /* USER CODE BEGIN Includes */
 #include "adc_dma.h"
 #include "usbd_cdc_if.h"
+#include "trigger.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
 /* USER CODE BEGIN PTD */
-
 /* USER CODE END PTD */
 
 /* Private define ------------------------------------------------------------*/
@@ -53,7 +53,7 @@ SPI_HandleTypeDef hspi2;
 TIM_HandleTypeDef htim1;
 
 /* USER CODE BEGIN PV */
-
+Trigger_t trigger;
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -113,6 +113,11 @@ int main(void)
   HAL_Delay(2000);
   CDC_Transmit_FS((uint8_t*)"Hello World!\r\n", 14);
   HAL_Delay(100);
+  Trigger_Init(&trigger, TRIG_NONE, 0);
+  HAL_Delay(2000);
+  CDC_Transmit_FS((uint8_t*)"Hello World!\r\n", 14);
+  HAL_Delay(100);
+  ADC_DMA_Start();
   ADC_DMA_Start();
   /* USER CODE END 2 */
 

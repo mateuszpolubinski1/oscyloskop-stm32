@@ -1,6 +1,6 @@
-../Core/Src/adc_dma.c:18:6:ADC_DMA_Start	1
-../Core/Src/adc_dma.c:25:6:ADC_DMA_Stop	1
-../Core/Src/adc_dma.c:32:6:HAL_ADC_ConvHalfCpltCallback	2
-../Core/Src/adc_dma.c:40:6:HAL_ADC_ConvCpltCallback	2
-../Core/Src/adc_dma.c:48:6:ADC_DMA_Przetworz_Polowe	2
-../Core/Src/adc_dma.c:58:6:ADC_DMA_Przetworz_Pelny	2
+../Core/Src/adc_dma.c:16:6:ADC_DMA_Start	1
+../Core/Src/adc_dma.c:23:6:ADC_DMA_Stop	1
+../Core/Src/adc_dma.c:30:6:HAL_ADC_ConvHalfCpltCallback	2
+../Core/Src/adc_dma.c:38:6:HAL_ADC_ConvCpltCallback	2
+../Core/Src/adc_dma.c:46:6:ADC_DMA_Przetworz_Polowe	3
+../Core/Src/adc_dma.c:58:6:ADC_DMA_Przetworz_Pelny	3

@@ -9,19 +9,16 @@
 #define INC_ADC_DMA_H_
 
 #include "main.h"
-extern ADC_HandleTypeDef hadc1;
+#include "trigger.h"
 
-// Rozmiar bufora — 1024 próbki (512 na połowę)
 #define ADC_BUFOR_ROZMIAR 1024
 
-// Bufor DMA — wypełniany automatycznie przez sprzęt
 extern uint16_t bufor_adc[ADC_BUFOR_ROZMIAR];
-
-// Flagi ustawiane w callbackach DMA
 extern volatile uint8_t flaga_polowa;
 extern volatile uint8_t flaga_pelny;
+extern Trigger_t trigger;
+extern ADC_HandleTypeDef hadc1;
 
-// Funkcje
 void ADC_DMA_Start(void);
 void ADC_DMA_Stop(void);
 void ADC_DMA_Przetworz_Polowe(void);

@@ -8,10 +8,8 @@
 #include "adc_dma.h"
 #include "usbd_cdc_if.h"
 
-// Definicja bufora — tutaj jest faktyczna pamięć
 uint16_t bufor_adc[ADC_BUFOR_ROZMIAR];
 
-// Definicja flag
 volatile uint8_t flaga_polowa = 0;
 volatile uint8_t flaga_pelny = 0;
 
@@ -48,8 +46,10 @@ void HAL_ADC_ConvCpltCallback(ADC_HandleTypeDef* hadc)
 void ADC_DMA_Przetworz_Polowe(void)
 {
     flaga_polowa = 0;
-    while(CDC_Transmit_FS((uint8_t*)&bufor_adc[0],
-          ADC_BUFOR_ROZMIAR/2) == USBD_BUSY)
+    int16_t offset = Trigger_Szukaj(&trigger, &bufor_adc[0], ADC_BUFOR_ROZMIAR/2);
+    if (offset < 0) return;
+    while(CDC_Transmit_FS((uint8_t*)&bufor_adc[offset],
+          (ADC_BUFOR_ROZMIAR/2 - offset) * 2) == USBD_BUSY)
     {
         HAL_Delay(1);
     }
@@ -58,8 +58,10 @@ void ADC_DMA_Przetworz_Polowe(void)
 void ADC_DMA_Przetworz_Pelny(void)
 {
     flaga_pelny = 0;
-    while(CDC_Transmit_FS((uint8_t*)&bufor_adc[ADC_BUFOR_ROZMIAR/2],
-          ADC_BUFOR_ROZMIAR/2) == USBD_BUSY)
+    int16_t offset = Trigger_Szukaj(&trigger, &bufor_adc[ADC_BUFOR_ROZMIAR/2], ADC_BUFOR_ROZMIAR/2);
+    if (offset < 0) return;
+    while(CDC_Transmit_FS((uint8_t*)&bufor_adc[ADC_BUFOR_ROZMIAR/2 + offset],
+          (ADC_BUFOR_ROZMIAR/2 - offset) * 2) == USBD_BUSY)
     {
         HAL_Delay(1);
     }
