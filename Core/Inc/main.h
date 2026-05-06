@@ -83,6 +83,8 @@ void Error_Handler(void);
 #define SD_CS_GPIO_Port GPIOB
 #define DDS_CS_Pin GPIO_PIN_1
 #define DDS_CS_GPIO_Port GPIOB
+#define DDS_RST_Pin GPIO_PIN_2
+#define DDS_RST_GPIO_Port GPIOB
 #define CLK_IN_Pin GPIO_PIN_10
 #define CLK_IN_GPIO_Port GPIOB
 #define LD4_Pin GPIO_PIN_12

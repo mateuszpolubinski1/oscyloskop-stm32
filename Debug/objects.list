@@ -1,4 +1,5 @@
 "./Core/Src/adc_dma.o"
+"./Core/Src/dds_ad9850.o"
 "./Core/Src/main.o"
 "./Core/Src/stm32f4xx_hal_msp.o"
 "./Core/Src/stm32f4xx_it.o"

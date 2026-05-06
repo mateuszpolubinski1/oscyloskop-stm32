@@ -26,6 +26,10 @@
 #include "adc_dma.h"
 #include "usbd_cdc_if.h"
 #include "trigger.h"
+#include "adc_dma.h"
+#include "usbd_cdc_if.h"
+#include "trigger.h"
+#include "dds_ad9850.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -110,14 +114,12 @@ int main(void)
   MX_TIM1_Init();
   MX_FATFS_Init();
   /* USER CODE BEGIN 2 */
-  HAL_Delay(2000);
-  CDC_Transmit_FS((uint8_t*)"Hello World!\r\n", 14);
-  HAL_Delay(100);
   Trigger_Init(&trigger, TRIG_NONE, 0);
+  DDS_Init();
+  DDS_SetFrequency(100.0f, 0);  // 1000 Hz sinus
   HAL_Delay(2000);
   CDC_Transmit_FS((uint8_t*)"Hello World!\r\n", 14);
   HAL_Delay(100);
-  ADC_DMA_Start();
   ADC_DMA_Start();
   /* USER CODE END 2 */
 
@@ -407,7 +409,7 @@ static void MX_GPIO_Init(void)
   HAL_GPIO_WritePin(OTG_FS_PowerSwitchOn_GPIO_Port, OTG_FS_PowerSwitchOn_Pin, GPIO_PIN_SET);
 
   /*Configure GPIO pin Output Level */
-  HAL_GPIO_WritePin(GPIOB, SD_CS_Pin|DDS_CS_Pin, GPIO_PIN_RESET);
+  HAL_GPIO_WritePin(GPIOB, SD_CS_Pin|DDS_CS_Pin|DDS_RST_Pin, GPIO_PIN_RESET);
 
   /*Configure GPIO pin Output Level */
   HAL_GPIO_WritePin(GPIOD, LD4_Pin|LD3_Pin|LD5_Pin|LD6_Pin
@@ -469,8 +471,8 @@ static void MX_GPIO_Init(void)
   GPIO_InitStruct.Alternate = GPIO_AF5_SPI1;
   HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
 
-  /*Configure GPIO pins : SD_CS_Pin DDS_CS_Pin */
-  GPIO_InitStruct.Pin = SD_CS_Pin|DDS_CS_Pin;
+  /*Configure GPIO pins : SD_CS_Pin DDS_CS_Pin DDS_RST_Pin */
+  GPIO_InitStruct.Pin = SD_CS_Pin|DDS_CS_Pin|DDS_RST_Pin;
   GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
