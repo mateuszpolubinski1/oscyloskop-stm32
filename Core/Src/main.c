@@ -115,8 +115,10 @@ int main(void)
   MX_FATFS_Init();
   /* USER CODE BEGIN 2 */
   Trigger_Init(&trigger, TRIG_NONE, 0);
+  HAL_Delay(500);
   DDS_Init();
-  DDS_SetFrequency(100.0f, 0);  // 1000 Hz sinus
+  DDS_SetFrequency(5.0f, 0);  // 1000 Hz sinus
+  HAL_GPIO_WritePin(GPIOD, GPIO_PIN_12, GPIO_PIN_SET); // zapal zieloną LED
   HAL_Delay(2000);
   CDC_Transmit_FS((uint8_t*)"Hello World!\r\n", 14);
   HAL_Delay(100);
