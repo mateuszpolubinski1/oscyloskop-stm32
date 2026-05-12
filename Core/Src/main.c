@@ -4,16 +4,6 @@
   * @file           : main.c
   * @brief          : Main program body
   ******************************************************************************
-  * @attention
-  *
-  * Copyright (c) 2026 STMicroelectronics.
-  * All rights reserved.
-  *
-  * This software is licensed under terms that can be found in the LICENSE file
-  * in the root directory of this software component.
-  * If no LICENSE file comes with this software, it is provided AS-IS.
-  *
-  ******************************************************************************
   */
 /* USER CODE END Header */
 /* Includes ------------------------------------------------------------------*/
@@ -26,10 +16,10 @@
 #include "adc_dma.h"
 #include "usbd_cdc_if.h"
 #include "trigger.h"
-#include "adc_dma.h"
-#include "usbd_cdc_if.h"
-#include "trigger.h"
 #include "dds_ad9850.h"
+#include "lcd_i2c.h"
+#include <string.h>
+#include <stdio.h>
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -38,12 +28,10 @@
 
 /* Private define ------------------------------------------------------------*/
 /* USER CODE BEGIN PD */
-
 /* USER CODE END PD */
 
 /* Private macro -------------------------------------------------------------*/
 /* USER CODE BEGIN PM */
-
 /* USER CODE END PM */
 
 /* Private variables ---------------------------------------------------------*/
@@ -66,12 +54,10 @@ static void MX_ADC1_Init(void);
 static void MX_I2C1_Init(void);
 static void MX_TIM1_Init(void);
 /* USER CODE BEGIN PFP */
-
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
-
 /* USER CODE END 0 */
 
 /**
@@ -82,7 +68,6 @@ int main(void)
 {
 
   /* USER CODE BEGIN 1 */
-
   /* USER CODE END 1 */
 
   /* MCU Configuration--------------------------------------------------------*/
@@ -91,14 +76,12 @@ int main(void)
   HAL_Init();
 
   /* USER CODE BEGIN Init */
-
   /* USER CODE END Init */
 
   /* Configure the system clock */
   SystemClock_Config();
 
   /* USER CODE BEGIN SysInit */
-
   /* USER CODE END SysInit */
 
   /* Initialize all configured peripherals */
@@ -113,8 +96,17 @@ int main(void)
   Trigger_Init(&trigger, TRIG_NONE, 0);
   HAL_Delay(500);
   DDS_Init();
-  DDS_SetFrequency(500.0f, 0);  // 1000 Hz sinus
-  HAL_GPIO_WritePin(GPIOD, GPIO_PIN_12, GPIO_PIN_SET); // zapal zieloną LED
+  DDS_SetFrequency(1000.0f, 0);
+  LCD_Init();
+  HAL_Delay(10);
+  LCD_SetCursor(0, 0);
+  HAL_Delay(5);
+  LCD_Print("Oscyloskop STM");
+  HAL_Delay(5);
+  LCD_SetCursor(1, 0);
+  HAL_Delay(5);
+  LCD_Print("Freq: 1000 Hz");
+  HAL_GPIO_WritePin(GPIOD, GPIO_PIN_12, GPIO_PIN_SET);
   HAL_Delay(2000);
   CDC_Transmit_FS((uint8_t*)"Hello World!\r\n", 14);
   HAL_Delay(100);
@@ -125,10 +117,9 @@ int main(void)
   /* USER CODE BEGIN WHILE */
   while (1)
   {
-	  if (flaga_polowa)
-	         ADC_DMA_Przetworz_Polowe();
-	  if (flaga_pelny)
-	         ADC_DMA_Przetworz_Pelny();
+      if (flaga_polowa) ADC_DMA_Przetworz_Polowe();
+      if (flaga_pelny) ADC_DMA_Przetworz_Pelny();
+
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
@@ -478,7 +469,6 @@ static void MX_GPIO_Init(void)
 }
 
 /* USER CODE BEGIN 4 */
-
 /* USER CODE END 4 */
 
 /**
