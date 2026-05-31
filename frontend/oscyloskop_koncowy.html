@@ -1,0 +1,284 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+    <meta charset="UTF-8">
+    <title>Oscyloskop STM32</title>
+    <style>
+        body { background: #1a1a2e; color: #eee; font-family: Arial, sans-serif; padding: 20px; margin: 0; display: flex; flex-direction: column; align-items: center; }
+        h1 { color: #00d4ff; margin-bottom: 10px; }
+        canvas { background: #0a0a1a; border: 2px solid #00d4ff; border-radius: 8px; margin: 10px 0; }
+        button { background: #00d4ff; color: #1a1a2e; border: none; padding: 10px 20px; border-radius: 6px; font-size: 16px; font-weight: bold; cursor: pointer; margin: 5px; }
+        button:hover { background: #00aacc; }
+        button:disabled { background: #555; color: #999; cursor: not-allowed; }
+        button.active { background: #ff66cc; color: #1a1a2e; }
+        button.save { background: #00ff88; color: #1a1a2e; }
+        button.save:hover { background: #00cc66; }
+        .panel { background: #0f0f25; border: 1px solid #2a2a4a; border-radius: 8px; padding: 15px; margin: 10px 0; display: flex; gap: 20px; flex-wrap: wrap; justify-content: center; align-items: center; }
+        .panel-group { display: flex; flex-direction: column; align-items: center; gap: 5px; }
+        .panel-label { font-size: 12px; color: #888; text-transform: uppercase; }
+        .panel-value { font-size: 18px; color: #00d4ff; font-weight: bold; }
+        input[type=number] { background: #1a1a2e; color: #00d4ff; border: 1px solid #00d4ff; padding: 5px 10px; border-radius: 4px; font-size: 16px; width: 100px; text-align: center; }
+        #status { font-size: 14px; color: #aaa; margin: 5px 0; }
+        .control-panel { background: #1a2a3a; border: 2px solid #00d4ff; padding: 20px; margin: 10px 0; border-radius: 8px; }
+        .control-panel h2 { color: #00d4ff; margin: 0 0 10px 0; }
+        .sd-panel { background: #1a3a2a; border: 2px solid #00ff88; padding: 20px; margin: 10px 0; border-radius: 8px; }
+        .sd-panel h2 { color: #00ff88; margin: 0 0 10px 0; }
+    </style>
+</head>
+<body>
+    <h1>🔬 Oscyloskop STM32F411</h1>
+
+    <div>
+        <button id="btnPolacz">🔌 Połącz USB</button>
+        <button id="btnRozlacz" disabled>❌ Rozłącz</button>
+    </div>
+    <div id="status">Nie połączono</div>
+
+    <div class="control-panel">
+        <h2>⚙️ Sterowanie generatorem DDS</h2>
+        <div class="panel">
+            <div class="panel-group">
+                <div class="panel-label">Częstotliwość (Hz)</div>
+                <input type="number" id="freqInput" value="1000" min="1" max="62500000" step="100">
+                <button id="btnSetFreq">Ustaw</button>
+            </div>
+        </div>
+        <div class="panel">
+            <div class="panel-group">
+                <div class="panel-label">Szybki wybór częstotliwości</div>
+                <div>
+                    <button class="freqPreset" data-freq="100">100 Hz</button>
+                    <button class="freqPreset" data-freq="500">500 Hz</button>
+                    <button class="freqPreset" data-freq="1000">1 kHz</button>
+                    <button class="freqPreset" data-freq="5000">5 kHz</button>
+                    <button class="freqPreset" data-freq="10000">10 kHz</button>
+                </div>
+            </div>
+        </div>
+        <div class="panel">
+            <div class="panel-group">
+                <div class="panel-label">Trigger (zatrzymanie sygnału)</div>
+                <button id="btnTrigger">⏸️ Zatrzymaj (Trigger)</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="sd-panel">
+        <h2>💾 Zapis na kartę SD</h2>
+        <div class="panel">
+            <div class="panel-group">
+                <div class="panel-label">Zapisz aktualne próbki ADC</div>
+                <button id="btnSave" class="save">💾 SAVE → probki.csv</button>
+            </div>
+        </div>
+    </div>
+
+    <canvas id="wykres" width="900" height="400"></canvas>
+
+    <div class="panel">
+        <div class="panel-group">
+            <div class="panel-label">Min</div>
+            <div class="panel-value" id="valMin">-</div>
+        </div>
+        <div class="panel-group">
+            <div class="panel-label">Max</div>
+            <div class="panel-value" id="valMax">-</div>
+        </div>
+        <div class="panel-group">
+            <div class="panel-label">Vpp</div>
+            <div class="panel-value" id="valVpp">-</div>
+        </div>
+        <div class="panel-group">
+            <div class="panel-label">Średnia</div>
+            <div class="panel-value" id="valAvg">-</div>
+        </div>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('wykres');
+        const ctx = canvas.getContext('2d');
+        const btnPolacz = document.getElementById('btnPolacz');
+        const btnRozlacz = document.getElementById('btnRozlacz');
+        const btnSetFreq = document.getElementById('btnSetFreq');
+        const btnTrigger = document.getElementById('btnTrigger');
+        const btnSave = document.getElementById('btnSave');
+        const freqInput = document.getElementById('freqInput');
+        const status = document.getElementById('status');
+
+        const DECIMACJA = 1;
+        const PROBKI_EKRAN = 200;
+
+        let port = null, reader = null, writer = null, aktywny = false;
+        let bufor = new Uint8Array(0);
+        let zatrzymany = false;
+
+        async function wyslijKomende(komenda) {
+            if (!writer) return;
+            const encoder = new TextEncoder();
+            await writer.write(encoder.encode(komenda));
+        }
+
+        btnSetFreq.addEventListener('click', async () => {
+            await wyslijKomende('FREQ:' + freqInput.value);
+        });
+
+        document.querySelectorAll('.freqPreset').forEach(btn => {
+            btn.addEventListener('click', async () => {
+                freqInput.value = btn.dataset.freq;
+                await wyslijKomende('FREQ:' + btn.dataset.freq);
+            });
+        });
+
+        btnTrigger.addEventListener('click', () => {
+            zatrzymany = !zatrzymany;
+            if (zatrzymany) {
+                btnTrigger.textContent = '▶️ Wznów';
+                btnTrigger.classList.add('active');
+                status.textContent = '⏸️ Sygnał zatrzymany (Trigger)';
+                status.style.color = '#ff66cc';
+            } else {
+                btnTrigger.textContent = '⏸️ Zatrzymaj (Trigger)';
+                btnTrigger.classList.remove('active');
+                status.textContent = '✅ Połączono';
+                status.style.color = '#00ff88';
+            }
+        });
+
+        btnSave.addEventListener('click', async () => {
+            if (!writer) {
+                status.textContent = '❌ Najpierw połącz USB';
+                status.style.color = '#ff4444';
+                return;
+            }
+            await wyslijKomende('SAVE');
+            status.textContent = '💾 Zapisuję na kartę SD...';
+            status.style.color = '#00ff88';
+
+            // Po 3 sekundach wróć do normalnego statusu
+            setTimeout(() => {
+                if (aktywny) {
+                    status.textContent = '✅ Połączono';
+                    status.style.color = '#00ff88';
+                }
+            }, 3000);
+        });
+
+        function rysuj(probki) {
+            ctx.fillStyle = '#0a0a1a';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            ctx.strokeStyle = '#1a2a3a';
+            ctx.lineWidth = 1;
+            for (let x = 0; x < canvas.width; x += 90) {
+                ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, canvas.height); ctx.stroke();
+            }
+            for (let y = 0; y < canvas.height; y += 80) {
+                ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(canvas.width, y); ctx.stroke();
+            }
+
+            if (probki.length === 0) return;
+
+            let zd = [];
+            for (let i = 0; i < probki.length && zd.length < PROBKI_EKRAN; i += DECIMACJA) zd.push(probki[i]);
+            if (zd.length < 2) return;
+
+            let min = Math.min(...zd);
+            let max = Math.max(...zd);
+            let avg = zd.reduce((a,b)=>a+b,0) / zd.length;
+            let vpp = max - min;
+
+            document.getElementById('valMin').textContent = (min * 3.3 / 4095).toFixed(3) + ' V';
+            document.getElementById('valMax').textContent = (max * 3.3 / 4095).toFixed(3) + ' V';
+            document.getElementById('valVpp').textContent = (vpp * 3.3 / 4095).toFixed(3) + ' V';
+            document.getElementById('valAvg').textContent = (avg * 3.3 / 4095).toFixed(3) + ' V';
+
+            ctx.strokeStyle = '#00d4ff';
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            for (let i = 0; i < zd.length; i++) {
+                let x = (i / (zd.length - 1)) * canvas.width;
+                let y = canvas.height - (zd[i] / 4095) * canvas.height;
+                if (i === 0) ctx.moveTo(x, y);
+                else ctx.lineTo(x, y);
+            }
+            ctx.stroke();
+        }
+
+        function parsujDane(nowyBufor) {
+            if (zatrzymany) return;
+
+            let polaczony = new Uint8Array(bufor.length + nowyBufor.length);
+            polaczony.set(bufor);
+            polaczony.set(nowyBufor, bufor.length);
+            bufor = polaczony;
+            let ileProbek = Math.floor(bufor.length / 2);
+            if (ileProbek === 0) return;
+            let probki = [];
+            for (let i = 0; i < ileProbek; i++) {
+                let wartosc = bufor[i * 2] | (bufor[i * 2 + 1] << 8);
+                probki.push(wartosc & 0x0FFF);
+            }
+            bufor = bufor.slice(ileProbek * 2);
+            rysuj(probki);
+        }
+
+        btnPolacz.addEventListener('click', async () => {
+            try {
+                port = await navigator.serial.requestPort();
+                await port.open({ baudRate: 115200 });
+                aktywny = true;
+                btnPolacz.disabled = true;
+                btnRozlacz.disabled = false;
+                status.textContent = '✅ Połączono';
+                status.style.color = '#00ff88';
+
+                writer = port.writable.getWriter();
+                await wyslijKomende('HELLO');
+                await wyslijKomende('WAVE:0');
+
+                reader = port.readable.getReader();
+                while (aktywny) {
+                    const { value, done } = await reader.read();
+                    if (done) break;
+                    if (value) parsujDane(value);
+                }
+            } catch (err) {
+                status.textContent = '❌ Błąd: ' + err.message;
+                status.style.color = '#ff4444';
+            }
+        });
+
+        btnRozlacz.addEventListener('click', async () => {
+            if (writer) {
+                try {
+                    await wyslijKomende('BYE');
+                    await new Promise(r => setTimeout(r, 200));
+                } catch (e) {}
+            }
+
+            aktywny = false;
+            zatrzymany = false;
+            btnTrigger.textContent = '⏸️ Zatrzymaj (Trigger)';
+            btnTrigger.classList.remove('active');
+
+            if (reader) { 
+                try { await reader.cancel(); } catch (e) {}
+                reader = null; 
+            }
+            if (writer) { 
+                try { writer.releaseLock(); } catch (e) {}
+                writer = null; 
+            }
+            if (port) { 
+                try { await port.close(); } catch (e) {}
+                port = null; 
+            }
+            btnPolacz.disabled = false;
+            btnRozlacz.disabled = true;
+            status.textContent = 'Rozłączono';
+            status.style.color = '#aaa';
+        });
+
+        rysuj([]);
+    </script>
+</body>
+</html>
