@@ -12,6 +12,8 @@ uint16_t bufor_adc[ADC_BUFOR_ROZMIAR];
 
 volatile uint8_t flaga_polowa = 0;
 volatile uint8_t flaga_pelny = 0;
+extern volatile uint8_t single_mode;
+extern volatile uint8_t single_zatrzasniety;
 
 void ADC_DMA_Start(void)
 {
@@ -46,23 +48,33 @@ void HAL_ADC_ConvCpltCallback(ADC_HandleTypeDef* hadc)
 void ADC_DMA_Przetworz_Polowe(void)
 {
     flaga_polowa = 0;
+    if (single_mode && single_zatrzasniety) return;  // czekamy na Run
+
     int16_t offset = Trigger_Szukaj(&trigger, &bufor_adc[0], ADC_BUFOR_ROZMIAR/2);
     if (offset < 0) return;
+
     while(CDC_Transmit_FS((uint8_t*)&bufor_adc[offset],
           (ADC_BUFOR_ROZMIAR/2 - offset) * 2) == USBD_BUSY)
     {
         HAL_Delay(1);
     }
+
+    if (single_mode) single_zatrzasniety = 1;  // złapaliśmy w trybie single
 }
 
 void ADC_DMA_Przetworz_Pelny(void)
 {
     flaga_pelny = 0;
-    int16_t offset = Trigger_Szukaj(&trigger, &bufor_adc[ADC_BUFOR_ROZMIAR/2], ADC_BUFOR_ROZMIAR/2);
-    if (offset < 0) return;
-    while(CDC_Transmit_FS((uint8_t*)&bufor_adc[ADC_BUFOR_ROZMIAR/2 + offset],
-          (ADC_BUFOR_ROZMIAR/2 - offset) * 2) == USBD_BUSY)
-    {
-        HAL_Delay(1);
-    }
+    if (single_mode && single_zatrzasniety) return;  // czekamy na Run
+
+        int16_t offset = Trigger_Szukaj(&trigger, &bufor_adc[0], ADC_BUFOR_ROZMIAR/2);
+        if (offset < 0) return;
+
+        while(CDC_Transmit_FS((uint8_t*)&bufor_adc[offset],
+              (ADC_BUFOR_ROZMIAR/2 - offset) * 2) == USBD_BUSY)
+        {
+            HAL_Delay(1);
+        }
+
+        if (single_mode) single_zatrzasniety = 1;  // złapaliśmy w trybie single
 }

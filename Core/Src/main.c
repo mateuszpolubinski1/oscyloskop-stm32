@@ -20,6 +20,8 @@
 #include "lcd_i2c.h"
 #include <string.h>
 #include <stdio.h>
+#include <stdlib.h>
+#include "fatfs.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -40,10 +42,21 @@ DMA_HandleTypeDef hdma_adc1;
 
 I2C_HandleTypeDef hi2c1;
 
+SPI_HandleTypeDef hspi1;
+
 TIM_HandleTypeDef htim1;
 
 /* USER CODE BEGIN PV */
 Trigger_t trigger;
+uint8_t gui_polaczone = 0;
+float aktualna_freq = 1000.0f;
+uint8_t aktualny_typ = 0;
+volatile uint8_t single_mode = 0;     // 1 = single, 0 = ciągły
+volatile uint8_t single_zatrzasniety = 0;  // 1 = już złapaliśmy, czekamy na Run
+FATFS fs;          // system plików
+FIL fil;           // uchwyt pliku
+FRESULT fres;      // wynik operacji
+char sd_bufor[64]; // bufor pomocniczy
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -53,6 +66,7 @@ static void MX_DMA_Init(void);
 static void MX_ADC1_Init(void);
 static void MX_I2C1_Init(void);
 static void MX_TIM1_Init(void);
+static void MX_SPI1_Init(void);
 /* USER CODE BEGIN PFP */
 /* USER CODE END PFP */
 
@@ -92,38 +106,171 @@ int main(void)
   MX_I2C1_Init();
   MX_TIM1_Init();
   MX_FATFS_Init();
+  MX_SPI1_Init();
   /* USER CODE BEGIN 2 */
   Trigger_Init(&trigger, TRIG_NONE, 0);
   HAL_Delay(500);
   DDS_Init();
   DDS_SetFrequency(1000.0f, 0);
   LCD_Init();
-  HAL_Delay(10);
   LCD_SetCursor(0, 0);
-  HAL_Delay(5);
   LCD_Print("Oscyloskop STM");
-  HAL_Delay(5);
   LCD_SetCursor(1, 0);
-  HAL_Delay(5);
-  LCD_Print("Freq: 1000 Hz");
+  LCD_Print("Wlacz gui     ");
   HAL_GPIO_WritePin(GPIOD, GPIO_PIN_12, GPIO_PIN_SET);
   HAL_Delay(2000);
-  CDC_Transmit_FS((uint8_t*)"Hello World!\r\n", 14);
-  HAL_Delay(100);
   ADC_DMA_Start();
   /* USER CODE END 2 */
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
   while (1)
-  {
-      if (flaga_polowa) ADC_DMA_Przetworz_Polowe();
-      if (flaga_pelny) ADC_DMA_Przetworz_Pelny();
+      {
+        if (flaga_polowa) ADC_DMA_Przetworz_Polowe();
+        if (flaga_pelny) ADC_DMA_Przetworz_Pelny();
 
+        if (komenda_gotowa)
+        {
+            // HELLO - GUI się łączy
+            if (komenda_bufor[0] == 'H' && komenda_bufor[1] == 'E' &&
+                komenda_bufor[2] == 'L' && komenda_bufor[3] == 'L' &&
+                komenda_bufor[4] == 'O')
+            {
+                if (!gui_polaczone)
+                {
+                    gui_polaczone = 1;
+                    LCD_Clear();
+                    LCD_SetCursor(0, 0);
+                    LCD_Print("F:1000Hz SIN");
+                    LCD_SetCursor(1, 0);
+                    LCD_Print("GUI polaczone");
+                }
+            }
+
+            // FREQ:1000 - ustaw częstotliwość
+            if (komenda_bufor[0] == 'F' && komenda_bufor[1] == 'R' &&
+                komenda_bufor[2] == 'E' && komenda_bufor[3] == 'Q' &&
+                komenda_bufor[4] == ':')
+            {
+                aktualna_freq = atof((char*)&komenda_bufor[5]);
+                DDS_SetFrequency(aktualna_freq, aktualny_typ);
+
+                char bufor_lcd[17];
+                char* typ_str = (aktualny_typ == 0) ? "SIN" : "SQR";
+                snprintf(bufor_lcd, 17, "F:%dHz %s   ", (int)aktualna_freq, typ_str);
+                LCD_SetCursor(0, 0);
+                LCD_Print(bufor_lcd);
+            }
+
+            // WAVE:0/1 - typ fali
+            if (komenda_bufor[0] == 'W' && komenda_bufor[1] == 'A' &&
+                komenda_bufor[2] == 'V' && komenda_bufor[3] == 'E' &&
+                komenda_bufor[4] == ':')
+            {
+                aktualny_typ = komenda_bufor[5] - '0';
+                DDS_SetFrequency(aktualna_freq, aktualny_typ);
+
+                char bufor_lcd[17];
+                char* typ_str = (aktualny_typ == 0) ? "SIN" : "SQR";
+                snprintf(bufor_lcd, 17, "F:%dHz %s   ", (int)aktualna_freq, typ_str);
+                LCD_SetCursor(0, 0);
+                LCD_Print(bufor_lcd);
+            }
+
+            // TRIG:N / TRIG:R:2048 / TRIG:F:2048
+            if (komenda_bufor[0] == 'T' && komenda_bufor[1] == 'R' &&
+                komenda_bufor[2] == 'I' && komenda_bufor[3] == 'G' &&
+                komenda_bufor[4] == ':')
+            {
+                if (komenda_bufor[5] == 'N')
+                    Trigger_Init(&trigger, TRIG_NONE, 0);
+                else if (komenda_bufor[5] == 'R' && komenda_bufor[6] == ':')
+                    Trigger_Init(&trigger, TRIG_RISING, atoi((char*)&komenda_bufor[7]));
+                else if (komenda_bufor[5] == 'F' && komenda_bufor[6] == ':')
+                    Trigger_Init(&trigger, TRIG_FALLING, atoi((char*)&komenda_bufor[7]));
+            }
+
+            // BYE - GUI się rozłącza
+            if (komenda_bufor[0] == 'B' && komenda_bufor[1] == 'Y' && komenda_bufor[2] == 'E')
+            {
+                gui_polaczone = 0;
+                LCD_Clear();
+                LCD_SetCursor(0, 0);
+                LCD_Print("Oscyloskop STM");
+                LCD_SetCursor(1, 0);
+                LCD_Print("Rozlaczono");
+            }
+
+            // SAVE - zapisz próbki ADC na kartę SD
+            if (komenda_bufor[0] == 'S' && komenda_bufor[1] == 'A' &&
+                komenda_bufor[2] == 'V' && komenda_bufor[3] == 'E')
+            {
+                LCD_Clear();
+                LCD_SetCursor(0, 0);
+                LCD_Print("Zapisywanie...");
+                LCD_SetCursor(1, 0);
+                LCD_Print("Czekaj..");
+
+                fres = f_mount(&fs, "", 1);
+                if (fres == FR_OK)
+                {
+                    fres = f_open(&fil, "probki.csv", FA_CREATE_ALWAYS | FA_WRITE);
+                    if (fres == FR_OK)
+                    {
+                        f_puts("# Probki ADC z oscyloskopu STM32\n", &fil);
+                        f_puts("wartosc\n", &fil);
+
+                        for (uint16_t i = 0; i < ADC_BUFOR_ROZMIAR; i++)
+                        {
+                            snprintf(sd_bufor, 64, "%u\n", bufor_adc[i]);
+                            f_puts(sd_bufor, &fil);
+                        }
+
+                        f_close(&fil);
+
+                        LCD_Clear();
+                        LCD_SetCursor(0, 0);
+                        LCD_Print("Zapis OK!");
+                        LCD_SetCursor(1, 0);
+                        LCD_Print("probki.csv");
+                        HAL_Delay(2000);
+
+                        char* typ_str = (aktualny_typ == 0) ? "SIN" : "SQR";
+                        snprintf(sd_bufor, 17, "F:%dHz %s   ", (int)aktualna_freq, typ_str);
+                        LCD_Clear();
+                        LCD_SetCursor(0, 0);
+                        LCD_Print(sd_bufor);
+                        LCD_SetCursor(1, 0);
+                        LCD_Print("GUI polaczone");
+                    }
+                    else
+                    {
+                        LCD_Clear();
+                        LCD_SetCursor(0, 0);
+                        LCD_Print("Blad otwarcia");
+                        LCD_SetCursor(1, 0);
+                        snprintf(sd_bufor, 17, "pliku (kod %d)", fres);
+                        LCD_Print(sd_bufor);
+                    }
+                    f_mount(NULL, "", 0);
+                }
+                else
+                {
+                    LCD_Clear();
+                    LCD_SetCursor(0, 0);
+                    LCD_Print("Blad karty SD");
+                    LCD_SetCursor(1, 0);
+                    snprintf(sd_bufor, 17, "kod: %d", fres);
+                    LCD_Print(sd_bufor);
+                }
+            }
+
+            komenda_gotowa = 0;
+        }
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
-  }
+      }
   /* USER CODE END 3 */
 }
 
@@ -255,6 +402,44 @@ static void MX_I2C1_Init(void)
   /* USER CODE BEGIN I2C1_Init 2 */
 
   /* USER CODE END I2C1_Init 2 */
+
+}
+
+/**
+  * @brief SPI1 Initialization Function
+  * @param None
+  * @retval None
+  */
+static void MX_SPI1_Init(void)
+{
+
+  /* USER CODE BEGIN SPI1_Init 0 */
+
+  /* USER CODE END SPI1_Init 0 */
+
+  /* USER CODE BEGIN SPI1_Init 1 */
+
+  /* USER CODE END SPI1_Init 1 */
+  /* SPI1 parameter configuration*/
+  hspi1.Instance = SPI1;
+  hspi1.Init.Mode = SPI_MODE_MASTER;
+  hspi1.Init.Direction = SPI_DIRECTION_2LINES;
+  hspi1.Init.DataSize = SPI_DATASIZE_8BIT;
+  hspi1.Init.CLKPolarity = SPI_POLARITY_LOW;
+  hspi1.Init.CLKPhase = SPI_PHASE_1EDGE;
+  hspi1.Init.NSS = SPI_NSS_SOFT;
+  hspi1.Init.BaudRatePrescaler = SPI_BAUDRATEPRESCALER_256;
+  hspi1.Init.FirstBit = SPI_FIRSTBIT_MSB;
+  hspi1.Init.TIMode = SPI_TIMODE_DISABLE;
+  hspi1.Init.CRCCalculation = SPI_CRCCALCULATION_DISABLE;
+  hspi1.Init.CRCPolynomial = 10;
+  if (HAL_SPI_Init(&hspi1) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  /* USER CODE BEGIN SPI1_Init 2 */
+
+  /* USER CODE END SPI1_Init 2 */
 
 }
 
@@ -414,14 +599,6 @@ static void MX_GPIO_Init(void)
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
   GPIO_InitStruct.Alternate = GPIO_AF6_SPI3;
   HAL_GPIO_Init(I2S3_WS_GPIO_Port, &GPIO_InitStruct);
-
-  /*Configure GPIO pins : SPI1_SCK_Pin SPI1_MISO_Pin SPI1_MOSI_Pin */
-  GPIO_InitStruct.Pin = SPI1_SCK_Pin|SPI1_MISO_Pin|SPI1_MOSI_Pin;
-  GPIO_InitStruct.Mode = GPIO_MODE_AF_PP;
-  GPIO_InitStruct.Pull = GPIO_NOPULL;
-  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_VERY_HIGH;
-  GPIO_InitStruct.Alternate = GPIO_AF5_SPI1;
-  HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
 
   /*Configure GPIO pins : SD_CS_Pin DDS_CS_Pin DDS_RST_Pin DDS_CLK_Pin
                            DDS_DATA_Pin */

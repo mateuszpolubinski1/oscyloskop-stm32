@@ -94,7 +94,9 @@
 extern USBD_CDC_ItfTypeDef USBD_Interface_fops_FS;
 
 /* USER CODE BEGIN EXPORTED_VARIABLES */
-
+extern uint8_t komenda_bufor[64];
+extern volatile uint8_t komenda_dlugosc;
+extern volatile uint8_t komenda_gotowa;
 /* USER CODE END EXPORTED_VARIABLES */
 
 /**
