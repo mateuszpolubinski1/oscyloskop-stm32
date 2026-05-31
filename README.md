@@ -7,6 +7,8 @@ Projekt z przedmiotu **Programowanie Mikrokontrolerów (PMiK)** — system pomia
 ## 📸 Zdjęcia
 
 ### Zmontowany układ
+<img width="5096" height="3002" alt="IMG_4405" src="https://github.com/user-attachments/assets/9e3f6370-7cf5-49dc-a9a0-27080f277182" />
+
 
 
 ### Frontend — aplikacja webowa
@@ -142,4 +144,4 @@ STM32 → Frontend: ciągły strumień próbek ADC (12-bit, little-endian).
 
 **Mateusz Połubiński** 
 
-Jest to rozszerzenie mikrokontrolerowe projektu 
+Jest to rozszerzenie mikrokontrolerowe projektu Arduinoscop, w którym można wykorzystać ten stworzony projekt.
