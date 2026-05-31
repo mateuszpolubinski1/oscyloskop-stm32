@@ -12,6 +12,7 @@ Projekt z przedmiotu **Programowanie Mikrokontrolerów (PMiK)** — system pomia
 
 
 ### Frontend — aplikacja webowa
+<img width="1128" height="890" alt="image" src="https://github.com/user-attachments/assets/0340e28a-52f2-41de-9aab-c2872f3ca293" />
 
 
 ---
